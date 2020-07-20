@@ -1,0 +1,90 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+mainClassName = "me.mpg.Native"
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    benchmarksCompile.extendsFrom testCompile
+    benchmarksRuntime.extendsFrom testRuntime
+}
+
+sourceSets {
+    benchmarks {
+        java.srcDir file('src/benchmarks/java')
+        resources.srcDir file('src/benchmarks/resources')
+        compileClasspath += main.output + test.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+boolean buildNativeReleaseMode = true
+
+task benchmarks(type: Test) {
+    // This links Rust binary with Java
+    if(buildNativeReleaseMode) {
+        systemProperty "java.library.path", file("$projectDir/target/release").absolutePath
+    } else {
+        systemProperty "java.library.path", file("$projectDir/target/debug").absolutePath
+    }
+
+    description = 'Runs benchmarks'
+    group = 'benchmarks'
+    testClassesDirs = sourceSets.benchmarks.output
+    classpath = sourceSets.benchmarks.runtimeClasspath
+}
+
+task debug {
+    println("${rootDir}")
+
+    if(buildNativeReleaseMode) {
+        println(file("$projectDir/target/release").absolutePath)
+    } else {
+        println(file("$projectDir/target/debug").absolutePath)
+    }
+}
+
+task buildRust(type: Exec) {
+    workingDir "${rootDir}"
+    if(buildNativeReleaseMode) {
+        commandLine 'cargo', 'build', '--release'
+    } else {
+        commandLine 'cargo', 'build'
+    }
+}
+
+compileJava.dependsOn buildRust
+
+test {
+    // This links Rust binary with Java
+    if(buildNativeReleaseMode) {
+        systemProperty "java.library.path", file("$projectDir/target/release").absolutePath
+    } else {
+        systemProperty "java.library.path", file("$projectDir/target/debug").absolutePath
+    }
+}
+
+dependencies {
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind', version: '2.11.1'
+    compile group: 'com.fasterxml.jackson.module', name: 'jackson-module-afterburner', version: '2.11.1'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok:1.18.8'
+    testCompileOnly 'org.projectlombok:lombok:1.18.8'
+    annotationProcessor 'org.projectlombok:lombok:1.18.8'
+
+    benchmarksAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.23'
+
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+    testCompile 'org.openjdk.jmh:jmh-core:1.23'
+    testCompile group: 'org.springframework', name: 'spring-test', version: '4.3.21.RELEASE'
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test', version: '1.5.18.RELEASE'
+}
